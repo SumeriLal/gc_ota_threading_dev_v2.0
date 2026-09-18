@@ -348,35 +348,22 @@ def sensor_value(value):
         sensor_data = value/10
         return "{:.1f}".format(sensor_data)
 
-def press_sensor_value(value):
-    if value >= 3000:
+def sensor_value_float(value):
+    if value >= 32766:
         value = None
         return value
     else:
-        sensor_data = value/100
+        sensor_data = value/10
         return sensor_data
 
 
-r_load = 1
-supply_voltage = 5.0
-adc_resolution = 1023.0
-pressure_min = 0
-pressure_max = 10
-
-
-def map_float(x, in_min, in_max, out_min, out_max):
-    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-
-def press_cal_function(value):
-    if value is None:
-        return None
-    else:
-        val = value
-        voltage = (val / adc_resolution) * supply_voltage
-        current_mA = (voltage / r_load) * 1000.0
-        pressure = map_float(current_mA, 4.0, 20.0, pressure_min, pressure_max)
-        pressure_data = round(pressure, 2)
-        return pressure_data
+def current_to_value(current_ma, min_value, max_value):
+    if current_ma < 4.0:
+        current_ma = 4.0
+    elif current_ma > 20.0:
+        current_ma = 20.0
+    sampled_value = ((current_ma - 4.0) / 16.0) * (max_value - min_value) + min_value
+    return sampled_value
 
 
 prev_cycle_count = None  # Define outside the function
@@ -398,12 +385,10 @@ def get_modbus_data():
     r2_out_temp = sensor_value(ppi_register[4])
     room1_temp_value = convert_room1_temp(ppi_register[5])
     room1_temp = sensor_value(room1_temp_value)
-    evap_press = press_sensor_value(ppi_register[6])
-    cond_press = press_sensor_value(ppi_register[7])
-    evap_press_in_bar = press_cal_function(evap_press)
-    cond_press_in_bar = press_cal_function(cond_press)
-    cond_temp = calculate_press_temp(cond_press_in_bar)
+    evap_press_in_bar = current_to_value(sensor_value_float(ppi_register[6]), 0, 25)
+    cond_press_in_bar = current_to_value(sensor_value_float(ppi_register[7]), 0, 25)
     evap_temp = calculate_press_temp(evap_press_in_bar)
+    cond_temp = calculate_press_temp(cond_press_in_bar)
 
     # callback function to read plc data for getting the details and status of the plc
     plc_resgisters_data1 = modbus.read_holding_registers(1, 4900, 36)
